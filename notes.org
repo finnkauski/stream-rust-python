@@ -73,7 +73,7 @@ fn new(frequency: Hz, duration: Seconds) -> Wave {
 
     // Vector type - different from an array as it is heap allocated.
     // This type can grow.
-    let mut waveform: Vec<f32> = Vec::with_capacity(n_entries);
+    let mut waveform: Vec<f32> = Vec::with_capacity(n_entries * 4);
 
     //              Hz    x        2pi    /     48000
     let step = (frequency * 2.0 * std::f32::consts::PI) / 48000.0;
@@ -129,7 +129,7 @@ Move new into the impl block
 impl Note {
     fn new(frequency: Hz, duration: Seconds) -> Self {
         let n_entries = (48000.0 * duration) as usize;
-        let mut waveform: Vec<u8> = Vec::with_capacity(n_entries);
+        let mut waveform: Vec<u8> = Vec::with_capacity(n_entries * 4);
 
         let step = (frequency * 2.0 * std::f32::consts::PI) / 48000.0;
 

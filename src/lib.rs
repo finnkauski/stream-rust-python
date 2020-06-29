@@ -40,7 +40,7 @@ impl Note {
 impl From<Note> for Bytes {
     fn from(note: Note) -> Self {
         let n_entries = (SAMPLES * note.duration) as usize;
-        let mut bytes: Vec<u8> = Vec::with_capacity(n_entries);
+        let mut bytes: Vec<u8> = Vec::with_capacity(n_entries * 4);
 
         let step = (note.freq() * 2.0 * std::f32::consts::PI) / SAMPLES;
         let mut attack = 0.0;
@@ -127,9 +127,17 @@ fn song(filename: &str, l: Vec<(i32, &str)>) {
     Song::from(l).save(filename).expect("Could not save song!");
 }
 
+#[pyfunction]
+fn song_pure(filename: &str, n: usize) {
+    Song::from(vec![(0, "h"); n])
+        .save(filename)
+        .expect("Could not save song!");
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn waverly(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(song)).unwrap();
+    m.add_wrapped(wrap_pyfunction!(song_pure)).unwrap();
     Ok(())
 }
