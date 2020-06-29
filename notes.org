@@ -527,6 +527,7 @@ const BPM: i32 = 120.0;
 // Stress that the ENUM is the TYPE,  but it can have N number
 // of VARIANTS
 pub enum NoteType {
+    Half,
     Quarter,
     Eight,
     Sixteenth,
@@ -539,6 +540,7 @@ impl From<NoteType> for Seconds {
         use NoteType::*;
         let frac = match notetype {
             Full => 1.0,
+            Half => 1.0 / 2.0,
             Quarter => 1.0 / 4.0,
             Eight => 1.0 / 8.0,
             Sixteenth => 1.0 / 16.0,
@@ -588,3 +590,126 @@ fn main() {
 This section will cover how to wrap all of this up for python.
 
 Firstly add PyO3 into the requirements and install maturin.
+
+This section will cover how to wrap all of this up for python.
+
+Firstly add PyO3 into the requirements and install maturin.
+#+BEGIN_SRC toml
+[package]
+name = "waverly"
+version = "0.1.0"
+edition = "2018"
+
+[lib]
+name = "waverly"
+crate-type = ["cdylib"]
+
+[dependencies.pyo3]
+version = "0.11.0"
+features = ["extension-module"]
+#+END_SRC
+
+
+Then rename main to =lib.rs= as this now is a library. And remove the =main= function.
+
+Add the following to the file and remove dead code attribute
+#+BEGIN_SRC
+use pyo3::prelude::*;
+use pyo3::wrap_pyfunction;
+#+END_SRC
+
+Worth highlighting this https://github.com/gperinazzo/dict-derive and the numpy bindings
+
+Add the following module into the code:
+#+BEGIN_SRC rust
+/// A Python module implemented in Rust.
+#[pymodule]
+fn waverly(py: Python, m: &PyModule) -> PyResult<()> {
+    Ok(())
+}
+#+END_SRC
+
+Export this with =cargo build --release= copy it into a folder and show that we can import it. Show the docstrings in python
+
+Then copy =cp target/release/libwaverly.so waverly.so= and import.
+
+Lets look up how can we pass in a list of tuples and make notes.
+https://pyo3.rs/v0.11.0/conversions.html
+
+Let us first implement a way to get a NoteType from a string.
+
+#+BEGIN_SRC rust
+impl From<&str> for NoteType {
+    fn from(s: &str) -> Self {
+        use NoteType::*;
+        match s {
+            "h" => Half,
+            "q" => Quarter,
+            "e" => Eight,
+            "s" => Sixteenth,
+            "f" => Full,
+            _ => panic!("Could not convert the string {} into a note type", s),
+        }
+    }
+}
+#+END_SRC
+
+Implement a way to get a song out of a =Vec<(i32, &str)>=:
+#+BEGIN_SRC rust
+impl From<Vec<(i32, &str)>> for Song {
+    fn from(v: Vec<(i32, &str)>) -> Song {
+        let mut notes = Vec::with_capacity(v.len());
+        for (semitone, notetype) in v {
+            notes.push(Note::new(semitone, notetype.into()));
+        }
+        Song { notes }
+    }
+}
+#+END_SRC
+
+Then start implementing the song generation. Make sure to highlight that you can
+indeed do fancy stuff like making Rust objects that get mapped to python objects
+directly: https://pyo3.rs/v0.11.0/class.html
+#+BEGIN_SRC rust
+/// Generates a song and saves it to a given file name
+#[pyfunction]
+fn song(filename: &str, l: Vec<(i32, &str)>) {
+    Song::from(l).save(filename).expect("Could not save song!");
+}
+#+END_SRC
+
+Finally wrap it in a python module:
+#+BEGIN_SRC rust
+/// A Python module implemented in Rust.
+#[pymodule]
+fn waverly(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(song)).unwrap();
+    Ok(())
+}
+#+END_SRC
+
+Export it again and try importing and using it.
+Make sure to remove =output.bin=
+
+Also good to cover.
+https://pyo3.rs/v0.11.0/function.html - functions
+https://pyo3.rs/v0.11.0/parallelism.html - parallelism
+
+* Distribution - Maturin
+
+Let us now package this up real quick for distribution
+(before that quick BPM change - 136)
+#+BEGIN_SRC bash
+maturin build
+#+END_SRC
+
+Check target/wheels
+
+Then pip install
+
+Final test:
+
+#+BEGIN_SRC python
+song = [(0, "q")] * 4 + [(0, "h")] + [(0, "q")] * 6 + [(0, "h")] + [(5, "q")] * 6 + [(5, "h")] + [(3, "q")] * 6 + [(3, "h")] + [(-2, "h")] + [(0, "q")] * 4 + [(0, "h")] + [(0, "q")] * 6 + [(0, "h")]
+#+END_SRC
+

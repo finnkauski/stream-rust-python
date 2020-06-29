@@ -1,7 +1,8 @@
-#![allow(dead_code)]
+use pyo3::prelude::*;
+use pyo3::wrap_pyfunction;
+
 type FilePath<'a> = &'a str;
 type Hz = f32;
-type Pulse = f32;
 type Notes = Vec<Note>;
 type Seconds = f32;
 type Bytes = Vec<u8>;
@@ -11,7 +12,7 @@ const PITCH_STANDARD: Hz = 440.0;
 const VOLUME: f32 = 0.3;
 const SAMPLES: f32 = 48000.0;
 const ATTACK: f32 = 0.0004;
-const BPM: i32 = 60;
+const BPM: i32 = 136;
 
 #[derive(Debug)]
 struct Note {
@@ -73,6 +74,7 @@ impl Song {
 }
 
 pub enum NoteType {
+    Half,
     Quarter,
     Eight,
     Sixteenth,
@@ -84,6 +86,7 @@ impl From<NoteType> for Seconds {
         use NoteType::*;
         let frac = match notetype {
             Full => 1.0,
+            Half => 1.0 / 2.0,
             Quarter => 1.0 / 4.0,
             Eight => 1.0 / 8.0,
             Sixteenth => 1.0 / 16.0,
@@ -94,21 +97,39 @@ impl From<NoteType> for Seconds {
     }
 }
 
-fn main() {
-    use NoteType::*;
-    Song {
-        notes: vec![
-            Note::new(0, Quarter),
-            Note::new(2, Quarter),
-            Note::new(4, Eight),
-            Note::new(5, Eight),
-            Note::new(7, Eight),
-            Note::new(9, Sixteenth),
-            Note::new(10, Quarter),
-            Note::new(11, Quarter),
-            Note::new(12, Sixteenth),
-        ],
+impl From<&str> for NoteType {
+    fn from(s: &str) -> Self {
+        use NoteType::*;
+        match s {
+            "h" => Half,
+            "q" => Quarter,
+            "e" => Eight,
+            "s" => Sixteenth,
+            "f" => Full,
+            _ => panic!("Could not convert the string {} into a note type", s),
+        }
     }
-    .save("output.bin")
-    .expect("Could not save song!");
+}
+
+impl From<Vec<(i32, &str)>> for Song {
+    fn from(v: Vec<(i32, &str)>) -> Song {
+        let mut notes = Vec::with_capacity(v.len());
+        for (semitone, notetype) in v {
+            notes.push(Note::new(semitone, notetype.into()));
+        }
+        Song { notes }
+    }
+}
+
+/// Generates a song
+#[pyfunction]
+fn song(filename: &str, l: Vec<(i32, &str)>) {
+    Song::from(l).save(filename).expect("Could not save song!");
+}
+
+/// A Python module implemented in Rust.
+#[pymodule]
+fn waverly(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(song)).unwrap();
+    Ok(())
 }
