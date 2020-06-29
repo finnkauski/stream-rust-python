@@ -134,10 +134,20 @@ fn song_pure(filename: &str, n: usize) {
         .expect("Could not save song!");
 }
 
+#[pyfunction]
+fn song_pure_cheeky(filename: String, n: usize) {
+    std::thread::spawn(move || {
+        Song::from(vec![(0, "h"); n])
+            .save(&filename[..])
+            .expect("Could not save song!")
+    });
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn waverly(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(song)).unwrap();
     m.add_wrapped(wrap_pyfunction!(song_pure)).unwrap();
+    m.add_wrapped(wrap_pyfunction!(song_pure_cheeky)).unwrap();
     Ok(())
 }
