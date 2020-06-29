@@ -1,0 +1,590 @@
+#+TITLE:  Notes for waverly stream
+
+* Introduction
+
+This is based on [[https://youtu.be/FYTZkE5BZ-0][Tsodings video]]. We will be making a way to generate music and play it using FFMPEG.
+
+And also this is inspired by Jon.
+
+* Set up and basics
+
+#+BEGIN_SRC bash
+cargo new
+#+END_SRC
+
+Set up the constant for PITCH_STANDARD and explain what that is roughly.
+
+#+BEGIN_QUOTE
+A440 (also known as Stuttgart pitch[citation needed]), or A4 in scientific pitch notation, is the musical pitch corresponding to an audio frequency of 440 Hz, which serves as a tuning standard for the musical note of A above middle C. It is standardized by the International Organization for Standardization as ISO 16. While other frequencies have been, and occasionally still are, used to tune the first A above middle C, A440 is now commonly used as a reference frequency to calibrate acoustic equipment and to tune pianos, violins, and other musical instruments. - Wikipedia
+#+END_QUOTE.
+
+Set up the type alias - this isn't a normal place to start, but lead this into basic types.
+- i32
+- u32
+- f32
+- char
+- &str
+- String
+
+#+BEGIN_SRC rust
+type Hz = f32;
+#+END_SRC
+
+Set the baseline frequency using a Rust constant.
+Make sure to stress this isn't how you would set normal variables.
+
+#+BEGIN_SRC rust
+const PITCH_STANDARD: Hz = 440.0; // 1. Do this first
+#+END_SRC
+
+Explain that =const= isn't that important.
+
+Other aliases such as pulse and vector
+#+BEGIN_SRC rust
+// This is an individual point on the curve.
+type Pulse = f32;
+
+// Wave is a vector of pulses - sine wave function
+type Wave = Vec<Pulse>;
+
+// Duration seconds - we use this later
+type Seconds = f32;
+#+END_SRC
+
+Create a simple function that makes a new note but first cover volume and how that relates to amplitude.
+#+BEGIN_SRC rust
+// Introduce the concept of volume
+const VOLUME: f32 = 0.3;
+#+END_SRC
+
+Lets make a function that makes a =Wave=. Make sure to cover:
+- let statements
+- mutability assignments
+- range
+- for loop
+- casting using as
+ 
+Make sure to cover how the returns work from blocks.
+#+BEGIN_SRC rust
+fn new(frequency: Hz, duration: Seconds) -> Wave {
+
+    // Explain sample rate 480000 and what we are doing here
+    let n_entries = (48000.0 * duration) as usize;
+
+    // Vector type - different from an array as it is heap allocated.
+    // This type can grow.
+    let mut waveform: Vec<f32> = Vec::with_capacity(n_entries);
+
+    //              Hz    x        2pi    /     48000
+    let step = (frequency * 2.0 * std::f32::consts::PI) / 48000.0;
+
+    //     Range (explain sample rate)
+    for n in 0..n_entries {
+
+        // Push onto the vector
+        waveform.push(VOLUME * (step * n as f32).sin());
+    }
+    waveform
+}
+#+END_SRC
+
+Lets have a look and write a simple test
+#+BEGIN_SRC rust
+// Let us first have a look at what we produce by dbg! printing in main
+println!("{}", new(PITCH_STANDARD));
+
+// Explain debug syntax {:?} and {:#?}
+// Essentially you want to know how to change it into string - hence display
+// However for debuging, a different string might be helpfull more.
+println!("{:?}", new(PITCH_STANDARD, 2.0));
+
+
+// Show the dbg! macro - first macro
+// Make sure to explain macros really briefly
+// Show vec! macro
+dbg!(new(PITCH_STANDARD, 2.0));
+dbg!(new(PITCH_STANDARD, 0.05));
+#+END_SRC
+
+I could also show how to write tests
+#+BEGIN_SRC rust
+#[test]
+...
+#+END_SRC
+
+* Structs - going deeper
+
+Introduce the =Note= structs and their syntax
+#+BEGIN_SRC rust
+struct Note(Wave) // show this first then move onto
+struct Note { // this notation
+    wave: Wave
+}
+#+END_SRC
+
+Move new into the impl block
+#+BEGIN_SRC rust
+// Constructor implementation
+// Note here we introduce the let statements
+impl Note {
+    fn new(frequency: Hz, duration: Seconds) -> Self {
+        let n_entries = (48000.0 * duration) as usize;
+        let mut waveform: Vec<u8> = Vec::with_capacity(n_entries);
+
+        let step = (frequency * 2.0 * std::f32::consts::PI) / 48000.0;
+
+        for n in 0..n_entries {
+            waveform.push(VOLUME * (step * n as f32).sin());
+        }
+       
+        Self { waveform }
+    }
+}
+// Show crate level attributes
+// There are a lot of stuff and features you can turn on and off
+#![allow(dead_code)]
+
+// Show the struct in main using dbg! and explain traits
+dbg!(Note::new(STANDARD_PITCH, 0.02));
+
+// Structs and deriving debug
+#[derive(Debug)]
+// compare this to the idea of - repr vs just memory location in python
+std::fmt::Debug // - SPC c d and rust docs
+#+END_SRC
+
+* Output
+
+Start thinking about saving this stuff so we can play it.
+#+BEGIN_SRC rust
+// Sketch out a syntax for save
+fn save(wave: Wave, filepath: FilePath) { todo!() }
+
+// Type alias Filepath and bytes
+// - avoid too much detail on lifetimes but make sure
+// to cover them briefly for those who understand
+type FilePath<'a> = &'a str;
+
+// Stumble into the issue of converting the floats into bytes
+fn save(wave: Wave, filepath: FilePath) {
+    use std::io::Write;
+    let bytes: Bytes = todo!();
+    let mut file = std::fs::File::create(filepath);
+    file.write_all(&bytes[..]).unwrap();
+}
+
+// Park that and talk about result type -> then add it back to the definition
+// relate to a try except block that both return
+fn save(wave: Wave, filepath: FilePath) -> Result<(), std::io::Error> {
+    use std::io::Write;
+    let bytes: Bytes = todo!();
+    let mut file = std::fs::File::create(filepath)?;
+    file.write_all(&bytes[..])?;
+    Ok(())
+}
+
+
+// Implement conversion function from Wave into bytes
+fn from_wave(wave: Wave) -> Bytes {
+    let mut vec = Vec::new();
+    for entry in wave {
+        vec.append(&mut entry.to_be_bytes().to_vec());
+    }
+    vec
+}
+
+// Brief detour to big endian - won't cover this.
+// Then fix save function - remove todo
+fn save(wave: Wave, filepath: FilePath) -> Result<(), std::io::Error> {
+    use std::io::Write;
+    let bytes: Bytes = from_wave(wave);
+    let mut file = std::fs::File::create(filepath)?;
+    file.write_all(&bytes[..])?;
+    Ok(())
+}
+#+END_SRC
+
+Try it out using ffplay
+#+BEGIN_SRC rust
+fn main() {
+    let wave = Note::new(STANDARD_PITCH, 2.0).waveform;
+    save(wave, "output.bin").expect("Could not save file!");
+}
+#+END_SRC
+
+Run this command - showing where the big endian comes in.
+#+BEGIN_SRC bash
+ffplay -f f32be -ar 48000 output.bin -showmode 1
+#+END_SRC
+
+* First refactor
+
+Explain that you want to use a vector of frequencies and durations as the Note struct.
+#+BEGIN_SRC rust
+// Change the implementation of the Note
+// Explain the meaning of pub
+struct Note {
+    pub freq: Hz,
+    pub duration: Seconds
+}
+
+// remove the new method by splitting it out into from_note
+fn from_note(note: Note) -> Wave {
+    let mut waveform = Vec::new();
+    let step = (note.freq * 2.0 * std::f32::consts::PI) / 48000.0;
+    for n in 0..(48000.0 * note.duration) as u32 {
+        waveform.push(VOLUME * (step * n as f32).sin());
+    }
+    waveform
+}
+
+// Update main and check it compiles
+fn main() {
+    let wave = from_note(Note {
+        freq: STANDARD_PITCH,
+        duration: 2.0,
+    });
+    save(wave, "output.bin").expect("Could not save file!");
+}
+
+// Write implementation of note_to_bytes and update save
+fn note_to_bytes(note: Note) -> Bytes {
+    from_wave(from_note(note))
+}
+
+// Now takes bytes
+fn save(bytes: Bytes, filepath: FilePath) -> Result<(), std::io::Error> {
+    use std::io::Write;
+    let mut file = std::fs::File::create(filepath)?;
+    file.write_all(&bytes[..])?;
+    Ok(())
+}
+
+// To bytes directly
+fn main() {
+    let wave = note_to_bytes(Note {
+        freq: STANDARD_PITCH,
+        duration: 2.0,
+    });
+    save(wave, "output.bin").expect("Could not save file!");
+}
+
+// Introduce samples constant as it is way overdue
+// Make sure to update the conversion functions
+const SAMPLES: f32 = 48000.0;
+
+// Introduct the from trait by implementing the from Note
+impl From<Note> for Wave {
+    fn from(note: Note) -> Self {
+        /* snip */
+    }
+}
+
+// This breaks our Wave type alias - saying we're defining behaviour
+// On a type that is outside of our crate.
+impl From<Wave> for Bytes {
+    fn from(wave: Wave) -> Self {
+        /* snip */
+    }
+}
+
+// Try to show that we can do an intermediary output struct.
+struct Sound {
+    waveform: Wave,
+}
+
+impl From<Sound> for Bytes {
+    fn from(sound: Sound) -> Self {
+        let mut vec = Vec::new();
+        for entry in sound.waveform {
+            vec.append(&mut entry.to_be_bytes().to_vec());
+        }
+        vec
+    }
+}
+
+// But in fact remove the Sound all together, and move into direct movement from note to bytes
+// Explain the dereference - and say that you can do this multiple ways
+impl From<Note> for Bytes {
+    fn from(note: Note) -> Self {
+        /* snip */
+        for n in 0..(48000.0 * note.duration) as u32 {
+            let converted: [u8; 4] = (VOLUME * (step * n as f32).sin()).to_be_bytes();
+            for byte in &converted { /* make sure to cover this bit a bit more */
+                bytes.push(*byte);
+            }
+        }
+        /* snip */
+    }
+}
+
+// Highlight the syntax of into how that comes from From as a blanket implementation
+fn main() {
+    let wave = Note {
+        freq: STANDARD_PITCH,
+        duration: 2.0,
+    }
+    .into();
+    save(wave, "output.bin").expect("Could not save file!");
+}
+
+// Now we need a way to go from a vector of Notes to a vector of u8
+// Missing a way to from Vec<Note> -> Vec<u8>
+// Type alias and remove Wave alias
+type Notes = Vec<Note>
+
+// Set up our new song object - makes sense could foresee things like song name
+struct Song {
+    notes: Notes,
+}
+
+// Now implement the conversion from a Song into bytes.
+impl From<Song> for Bytes {
+    fn from(song: Song) -> Self {
+        // A lot to cover
+        // Convert to iterator, then introduce map and flatten.
+        // Collect method is the key - look up docs
+        song.notes.into_iter().map(Bytes::from).flatten().collect()
+    }
+}
+
+// Finally we can do this!
+fn main() {
+    let notes = Song { notes: vec![
+        Note {
+            freq: STANDARD_PITCH,
+            duration: 2.0,
+        },
+        Note {
+            freq: STANDARD_PITCH,
+            duration: 2.0,
+        },
+    ]}.into();
+    save(notes, "output.bin").expect("Could not save file!");
+}
+
+// Let us move the save into the song struct
+impl Song {
+    fn save(self, filepath: FilePath) -> Result<(), std::io::Error> {
+        use std::io::Write;
+        let mut file = std::fs::File::create(filepath)?;
+        let bytes = Bytes::from(self);
+        file.write_all(&bytes[..])?;
+        Ok(())
+    }
+}
+
+// And rewrite the main
+fn main() {
+    Song {
+        notes: vec![
+            Note {
+                freq: STANDARD_PITCH,
+                duration: 2.0,
+            },
+            Note {
+                freq: STANDARD_PITCH,
+                duration: 2.0,
+            },
+            Note {
+                freq: 520.0,
+                duration: 2.0,
+            },
+        ],
+    }
+    .save("output.bin")
+    .expect("Could not save song!");
+}
+#+END_SRC
+
+* Attack
+Introduce attack as we cant tell the difference between the first 2 tones
+#+BEGIN_SRC rust
+// Add attack per sample growth - simple way out
+const ATTACK: f32 = 0.0004;
+
+impl From<Note> for Bytes {
+    fn from(note: Note) -> Self {
+        let mut bytes = Vec::new();
+        let step = (note.freq * 2.0 * std::f32::consts::PI) / 48000.0;
+        // set it here
+        let mut attack = 0.0;
+        for n in 0..(SAMPLES * note.duration) as u32 {
+            // Make it just accumulate per note
+            if attack < 1.0 {
+                attack += ATTACK;
+            };
+            let converted: [u8; 4] = (attack * VOLUME * (step * n as f32).sin()).to_be_bytes();
+            for byte in &converted {
+                bytes.push(*byte);
+            }
+        }
+        bytes
+    }
+}
+#+END_SRC
+
+* Semitones
+Now we introduce a semitone to frequency conversion
+More info: https://pages.mtu.edu/~suits/NoteFreqCalcs.html
+#+BEGIN_SRC rust
+// Introduce a semitone type alias
+type Semitone = i32;
+
+// Write Semitone to frequency function
+fn semitone_to_freq(n: Semitone) -> Hz {
+    let a = (2.0 as f32).powf(1.0 / 12.0);
+    PITCH_STANDARD * a.powi(n)
+}
+
+// Move it into the Note definition
+struct Note {
+    semitones: Semitone,
+    duration: Seconds,
+}
+
+// Add impl block
+// Note the use of reference to self
+// Explain how if we passed self it would consume it.
+impl Note {
+    fn freq(&self) -> Hz {
+        let a = (2.0 as f32).powf(1.0 / 12.0);
+        PITCH_STANDARD * a.powi(self.semitones)
+    }
+}
+
+// Update conversion function
+// Stress that really we could implement this in new and do the
+// conversion once into frequency at creation of the object.
+// Rather than whenever the conversion happens. But :shrug:
+impl From<Note> for Bytes {
+    fn from(note: Note) -> Self {
+        let mut bytes = Vec::new();
+        let step = (note.freq() * 2.0 * std::f32::consts::PI) / 48000.0;
+        let mut attack = 0.0;
+        for n in 0..(SAMPLES * note.duration) as u32 {
+            if attack < 1.0 {
+                attack += ATTACK;
+            };
+            let converted: [u8; 4] = (attack * VOLUME * (step * n as f32).sin()).to_be_bytes();
+            for byte in &converted {
+                bytes.push(*byte);
+            }
+        }
+        bytes
+    }
+}
+
+// Update main
+fn main() {
+    Song {
+        notes: vec![
+            Note {
+                semitones: 0,
+                duration: 1.0,
+            },
+            Note {
+                semitones: 2,
+                duration: 1.0,
+            },
+            Note {
+                semitones: 4,
+                duration: 1.0,
+            },
+            Note {
+                semitones: 5,
+                duration: 1.0,
+            },
+            Note {
+                semitones: 7,
+                duration: 1.0,
+            },
+            Note {
+                semitones: 9,
+                duration: 1.0,
+            },
+            Note {
+                semitones: 11,
+                duration: 1.0,
+            },
+            Note {
+                semitones: 12,
+                duration: 1.0,
+            },
+        ],
+    }
+    .save("output.bin")
+    .expect("Could not save song!");
+}
+#+END_SRC
+
+* Tempo
+#+BEGIN_SRC rust
+// Add BPM
+const BPM: i32 = 120.0;
+
+// Add note type as enum - and cover enums really briefly
+// Stress that the ENUM is the TYPE,  but it can have N number
+// of VARIANTS
+pub enum NoteType {
+    Quarter,
+    Eight,
+    Sixteenth,
+    Full,
+}
+
+// Add note type as a Enum and implement the conversion to duration
+impl From<NoteType> for Seconds {
+    fn from(notetype: NoteType) -> Self {
+        use NoteType::*;
+        let frac = match notetype {
+            Full => 1.0,
+            Quarter => 1.0 / 4.0,
+            Eight => 1.0 / 8.0,
+            Sixteenth => 1.0 / 16.0,
+        };
+
+        let seconds_per_beat = 60.0 / BPM as f32;
+        frac * seconds_per_beat
+    }
+}
+
+// Now let us tweak the note constructor
+impl Note {
+    fn new(semitones: Semitone, which_type: NoteType) -> Self {
+        Note {
+            semitones,
+            duration: which_type.into(),
+        }
+    }
+    fn freq(&self) -> Hz {
+        let a = (2.0 as f32).powf(1.0 / 12.0);
+        PITCH_STANDARD * a.powi(self.semitones)
+    }
+}
+// Introduce this to main
+fn main() {
+    use NoteType::*;
+    Song {
+        notes: vec![
+            Note::new(0, Quarter),
+            Note::new(2, Quarter),
+            Note::new(4, Eight),
+            Note::new(5, Eight),
+            Note::new(7, Eight),
+            Note::new(9, Sixteenth),
+            Note::new(10, Sixteenth),
+            Note::new(11, Sixteenth),
+            Note::new(12, Sixteenth),
+        ],
+    }
+    .save("output.bin")
+    .expect("Could not save song!");
+}
+#+END_SRC
+
+* Python
+
+This section will cover how to wrap all of this up for python.
+
+Firstly add PyO3 into the requirements and install maturin.
